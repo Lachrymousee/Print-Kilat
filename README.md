@@ -30,7 +30,7 @@ print-kilat/
 │   ├── order.js      Logika halaman pemesanan
 │   ├── tracking.js   Pelacakan pelanggan (mengikuti aksi kurir)
 │   ├── login.js  admin.js  courier.js  landing.js
-└── assets
+└── assets/
     ├── logo.svg
     ├── sepeda.jpg
 ```
