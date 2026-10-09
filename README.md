@@ -30,7 +30,9 @@ print-kilat/
 │   ├── order.js      Logika halaman pemesanan
 │   ├── tracking.js   Pelacakan pelanggan (mengikuti aksi kurir)
 │   ├── login.js  admin.js  courier.js  landing.js
-└── assets/            logo.svg, sepeda.jpg (tinggal ditimpa), logo.svg
+└── assets
+    ├── logo.svg
+    ├── sepeda.jpg
 ```
 
 ## Fitur pemesanan (hasil masukan responden)
@@ -66,9 +68,9 @@ Satu sumber di `js/footer.js`, dipakai beranda, pesan, pelacakan, dan keamanan (
 
 ## Akun demo (ubah di js/config.js)
 
-| Peran | Username        | Password   |
-| ----- | --------------- | ---------- |
-| Admin | `admin`         | `admin123` |
+| Peran | Username            | Password   |
+| ----- | ------------------- | ---------- |
+| Admin | `admin`             | `admin123` |
 | Kurir | `kurir1` / `kurir2` | `kurir123` |
 
 Daftar ini juga tampil di halaman login selama `showDemoLoginHint: true`. **Ubah ke `false` sebelum dipublikasikan.**
