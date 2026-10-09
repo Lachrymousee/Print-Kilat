@@ -6,27 +6,48 @@
    ke Supabase/Firebase tanpa mengubah halaman lain (lihat README).
 
    Alur status:  pending → paid → printing → picked_up → on_the_way → delivered
+   (tahap delivered hanya bisa dicapai dengan kode serah terima dari penerima)
    ============================================================ */
 window.KilatDB = (() => {
-  const KEY = 'printkilat.orders.v2';
-  const FLOW = ['paid', 'printing', 'picked_up', 'on_the_way', 'delivered'];
+  const KEY = "printkilat.orders.v3"; // v3: satu pesanan bisa berisi beberapa file + kode serah terima
+  const FLOW = ["paid", "printing", "picked_up", "on_the_way", "delivered"];
 
   const read = () => {
-    try { return JSON.parse(localStorage.getItem(KEY)) || []; }
-    catch { return []; }
+    try {
+      return JSON.parse(localStorage.getItem(KEY)) || [];
+    } catch {
+      return [];
+    }
   };
   const write = (list) => {
-    try { localStorage.setItem(KEY, JSON.stringify(list)); return true; }
-    catch { return false; }
+    try {
+      localStorage.setItem(KEY, JSON.stringify(list));
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  // Kode serah terima 4 digit: hanya penerima (lewat halaman pelacakan) yang tahu.
+  const newCode = () => {
+    try {
+      const a = new Uint32Array(1);
+      window.crypto.getRandomValues(a);
+      return String(a[0] % 10000).padStart(4, "0");
+    } catch (e) {
+      return String(Math.floor(Math.random() * 10000)).padStart(4, "0");
+    }
   };
   const makeId = (taken) => {
     const d = new Date();
-    const stamp = String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789';
+    const stamp =
+      String(d.getMonth() + 1).padStart(2, "0") +
+      String(d.getDate()).padStart(2, "0");
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789";
     let id;
     do {
-      let s = '';
-      for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
+      let s = "";
+      for (let i = 0; i < 4; i++)
+        s += chars[Math.floor(Math.random() * chars.length)];
       id = `PK-${stamp}-${s}`;
     } while (taken.has(id));
     return id;
@@ -43,8 +64,8 @@ window.KilatDB = (() => {
         ...data,
         id: makeId(new Set(list.map((o) => o.id))),
         createdAt: now,
-        status: 'pending',
-        history: { pending: now }
+        status: "pending",
+        history: { pending: now },
       };
       list.unshift(order);
       write(list.slice(0, 200));
@@ -57,35 +78,60 @@ window.KilatDB = (() => {
       const o = list.find((x) => x.id === id);
       if (!o) return null;
       const now = Date.now();
-      o.status = 'paid';
+      o.status = "paid";
       o.paidAt = now;
+      o.handoverCode = o.handoverCode || newCode();
       o.history = { ...(o.history || {}), paid: now };
       write(list);
       return o;
     },
 
     /** Kurir memajukan pesanan ke tahap berikutnya (sekaligus "mengklaim" pesanan). */
-    async advance(id, courier) {
+    async advance(id, courier, extra = {}) {
       const list = read();
       const o = list.find((x) => x.id === id);
-      if (!o) return { ok: false, error: 'Pesanan tidak ditemukan.' };
+      if (!o) return { ok: false, error: "Pesanan tidak ditemukan." };
       const i = FLOW.indexOf(o.status);
-      if (i === -1 || i === FLOW.length - 1) return { ok: false, error: 'Pesanan ini tidak bisa dimajukan.' };
+      if (i === -1 || i === FLOW.length - 1)
+        return { ok: false, error: "Pesanan ini tidak bisa dimajukan." };
       if (o.courier && o.courier.username !== courier.username) {
-        return { ok: false, error: `Pesanan ini sedang dikerjakan kurir ${o.courier.name}.` };
+        return {
+          ok: false,
+          error: `Pesanan ini sedang dikerjakan kurir ${o.courier.name}.`,
+        };
       }
       const next = FLOW[i + 1];
-      if (!o.courier) o.courier = { username: courier.username, name: courier.name };
+      // Tahap terakhir butuh kode serah terima dari penerima.
+      if (
+        next === "delivered" &&
+        o.handoverCode &&
+        String(extra.code || "").trim() !== o.handoverCode
+      ) {
+        return {
+          ok: false,
+          error: "Kode serah terima salah. Minta kode 4 digit dari penerima.",
+        };
+      }
+      if (!o.courier)
+        o.courier = { username: courier.username, name: courier.name };
       o.status = next;
       o.history = { ...(o.history || {}), [next]: Date.now() };
       write(list);
       return { ok: true, order: o };
     },
 
-    async getOrder(id) { return read().find((o) => o.id === id) || null; },
-    async latestOrder() { return read()[0] || null; },
-    async latestPaidOrder() { return read().find((o) => o.status !== 'pending') || read()[0] || null; },
-    async listOrders() { return read(); },
+    async getOrder(id) {
+      return read().find((o) => o.id === id) || null;
+    },
+    async latestOrder() {
+      return read()[0] || null;
+    },
+    async latestPaidOrder() {
+      return read().find((o) => o.status !== "pending") || read()[0] || null;
+    },
+    async listOrders() {
+      return read();
+    },
 
     async updateOrder(id, patch) {
       const list = read();
@@ -108,13 +154,17 @@ window.KilatDB = (() => {
       write([...added, ...list].slice(0, 200));
     },
 
-    async clearAll() { write([]); },
+    async clearAll() {
+      write([]);
+    },
 
     /** Dipanggil saat data berubah dari TAB LAIN di browser yang sama. */
     subscribe(cb) {
-      const h = (e) => { if (e.key === KEY) cb(); };
-      window.addEventListener('storage', h);
-      return () => window.removeEventListener('storage', h);
-    }
+      const h = (e) => {
+        if (e.key === KEY) cb();
+      };
+      window.addEventListener("storage", h);
+      return () => window.removeEventListener("storage", h);
+    },
   };
 })();

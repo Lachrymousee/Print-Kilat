@@ -1,286 +1,732 @@
 /* ============================================================
    Print Kilat — logika halaman pemesanan
-   Alur: tujuan → upload + preview → detail cetak → ringkasan
-         → popup QRIS dummy → simpan pesanan → tracking.html
+   Alur: tujuan → upload beberapa file + preview + rentang halaman
+         → detail cetak per file → ringkasan → popup QRIS dummy
+         → simpan pesanan → tracking.html
    ============================================================ */
 (() => {
-  'use strict';
+  "use strict";
   const C = window.KILAT_CONFIG;
   const P = C.pricing;
+  const PR = window.KilatPricing;
+  const RG = window.KilatRange;
+  const V = window.KilatOrderView;
+
   const $ = (sel) => document.querySelector(sel);
-  const rp = (n) => 'Rp ' + Math.round(n).toLocaleString('id-ID');
-  const rpTight = (n) => rp(n).replace('Rp ', 'Rp');
-  const kmFmt = (n) => n.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' km';
+  const rp = (n) => "Rp " + Math.round(n).toLocaleString("id-ID");
+  const rpTight = (n) => rp(n).replace("Rp ", "Rp");
+  const kmFmt = (n) =>
+    n.toLocaleString("id-ID", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }) + " km";
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const esc = (s) =>
+    String(s == null ? "" : s).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const shortName = (name, n = 22) =>
+    name.length > n ? name.slice(0, n - 1) + "…" : name;
+  const sizeText = (bytes) =>
+    bytes >= 1048576
+      ? (bytes / 1048576).toFixed(1).replace(".", ",") + " MB"
+      : Math.max(1, Math.round(bytes / 1024)) + " KB";
+
+  const DEFAULTS = {
+    color: "bw",
+    sides: "single",
+    paper: "A4",
+    paperType: "hvs70",
+    binding: "none",
+    copies: 1,
+  };
 
   /* ---------- state ---------- */
   const state = {
     campusId: C.campuses[0].id,
-    address: '',
+    address: "",
     distanceKm: C.campuses[0].defaultDistanceKm,
-    userCoords: null,          // diisi jika pelanggan membagikan lokasi
-    file: null,                // { name, size, ext }
-    pages: 0,
-    pagesEstimated: false,
-    color: 'bw',
-    sides: 'single',
-    paper: 'A4',
-    binding: 'none',
-    copies: 1
+    userCoords: null, // diisi jika pelanggan membagikan lokasi
+    files: [], // lihat addFile() untuk bentuk item
+    activeId: null, // file yang pengaturannya sedang ditampilkan di bagian 03
+    defaults: { ...DEFAULTS }, // pengaturan terakhir dipakai; diwarisi file berikutnya
   };
+  let seq = 0;
 
   /* ---------- elemen ---------- */
   const el = {
-    campus: $('#campus'), campusHint: $('#campusHint'),
-    address: $('#address'), addressError: $('#addressError'),
-    btnGeo: $('#btnGeo'), geoStatus: $('#geoStatus'),
-    dropzone: $('#dropzone'), file: $('#file'), fileError: $('#fileError'),
-    preview: $('#preview'), stage: $('#previewStage'), fileBadge: $('#fileBadge'),
-    fileName: $('#fileName'), fileSub: $('#fileSub'), btnRemove: $('#btnRemove'),
-    pager: $('#pager'), prev: $('#prevPage'), next: $('#nextPage'), pageInfo: $('#pageInfo'),
-    pagesEdit: $('#pagesEdit'), pagesInput: $('#pagesInput'), previewNote: $('#previewNote'),
-    binding: $('#binding'), paper: $('#paper'),
-    copies: $('#copies'), copiesMinus: $('#copiesMinus'), copiesPlus: $('#copiesPlus'),
-    etaBox: $('#etaBox'), etaMain: $('#etaMain'), etaTo: $('#etaTo'),
-    lines: $('#lines'), total: $('#total'), formError: $('#formError'), btnPay: $('#btnPay'),
-    modal: $('#payModal'), qr: $('#qr'), payAmount: $('#payAmount'), payTimer: $('#payTimer'),
-    btnPaid: $('#btnPaid'), payView: $('#payView'), paySuccess: $('#paySuccess')
+    campus: $("#campus"),
+    campusHint: $("#campusHint"),
+    address: $("#address"),
+    addressError: $("#addressError"),
+    btnGeo: $("#btnGeo"),
+    geoStatus: $("#geoStatus"),
+    dropzone: $("#dropzone"),
+    file: $("#file"),
+    dzSub: $("#dzSub"),
+    fileError: $("#fileError"),
+    fileList: $("#fileList"),
+    tabsWrap: $("#tabsWrap"),
+    fileTabs: $("#fileTabs"),
+    applyRow: $("#applyRow"),
+    btnApplyAll: $("#btnApplyAll"),
+    paperSize: $("#paperSize"),
+    paperType: $("#paperType"),
+    binding: $("#binding"),
+    paperHint: $("#paperHint"),
+    copies: $("#copies"),
+    copiesMinus: $("#copiesMinus"),
+    copiesPlus: $("#copiesPlus"),
+    etaBox: $("#etaBox"),
+    etaMain: $("#etaMain"),
+    etaTo: $("#etaTo"),
+    lines: $("#lines"),
+    total: $("#total"),
+    formError: $("#formError"),
+    btnPay: $("#btnPay"),
+    modal: $("#payModal"),
+    qr: $("#qr"),
+    payAmount: $("#payAmount"),
+    payTimer: $("#payTimer"),
+    btnPaid: $("#btnPaid"),
+    payView: $("#payView"),
+    paySuccess: $("#paySuccess"),
   };
+  const colorRadios = [...document.querySelectorAll('input[name="color"]')];
+  const sidesRadios = [...document.querySelectorAll('input[name="sides"]')];
 
   const campus = () => C.campuses.find((c) => c.id === state.campusId);
+  const cardOf = (id) => el.fileList.querySelector(`[data-id="${id}"]`);
+  const q = (card, role) => card.querySelector(`[data-role="${role}"]`);
+  const itemOf = (id) => state.files.find((f) => f.id === id);
 
   /* ---------- perhitungan ---------- */
-  function etaMinutes() {
-    return Math.round((state.distanceKm / C.courierKmh) * 60) + C.prepMinutes;
-  }
+  const countOf = (f) =>
+    f.loading || !f.range || !f.range.ok ? 0 : f.range.count;
+  const etaMinutes = () =>
+    Math.round((state.distanceKm / C.courierKmh) * 60) + C.prepMinutes;
   const inRadius = () => state.distanceKm <= C.radiusKm;
 
-  function calc() {
-    return window.KilatPricing.calc(state);
+  function priceOrder() {
+    const items = state.files.length
+      ? state.files.map((f) => ({ ...f.settings, pages: countOf(f) }))
+      : [{ ...state.defaults, pages: 0 }];
+    return PR.calcOrder(items);
   }
 
-  /* ---------- render ---------- */
+  /* ---------- ringkasan ---------- */
   function renderSummary() {
-    const c = calc();
-    const rows = [
-      [`${state.pages} hal × ${state.copies} · ${state.color === 'color' ? 'Berwarna' : 'Hitam putih'}`, c.print]
-    ];
-    if (state.binding !== 'none') rows.push([P.binding[state.binding].label, c.binding]);
-    rows.push([`Ongkir radius ${C.radiusKm} km`, c.delivery], ['Biaya platform', c.platform]);
-    el.lines.innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${rp(v)}</dd></div>`).join('');
-    el.total.textContent = rp(c.total);
+    const calc = priceOrder();
+    const rows = [];
+
+    if (!state.files.length) {
+      const s = PR.normalize(state.defaults);
+      rows.push([
+        `0 hal × ${s.copies} · ${V.colorLabel(s.color)}`,
+        calc.items[0].print,
+      ]);
+      if (s.binding !== "none")
+        rows.push([V.bindLabel(s.binding), calc.items[0].binding]);
+    } else {
+      const multi = state.files.length > 1;
+      state.files.forEach((f, i) => {
+        const s = PR.normalize(f.settings);
+        const tag = multi ? shortName(f.name, 16) + " · " : "";
+        rows.push([
+          `${tag}${countOf(f)} hal × ${s.copies} · ${V.colorLabel(s.color)}`,
+          calc.items[i].print,
+        ]);
+        if (s.binding !== "none")
+          rows.push([
+            `${V.bindLabel(s.binding)}${multi ? " · " + shortName(f.name, 16) : ""}`,
+            calc.items[i].binding,
+          ]);
+      });
+    }
+    rows.push(
+      [`Ongkir radius ${C.radiusKm} km`, calc.delivery],
+      ["Biaya platform", calc.platform],
+    );
+
+    el.lines.innerHTML = rows
+      .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${rp(v)}</dd></div>`)
+      .join("");
+    el.total.textContent = rp(calc.total);
 
     const out = !inRadius();
-    el.etaBox.classList.toggle('is-out', out);
+    el.etaBox.classList.toggle("is-out", out);
     el.etaMain.textContent = out
       ? `${kmFmt(state.distanceKm)} · di luar radius ${C.radiusKm} km`
       : `${kmFmt(state.distanceKm)} · ${etaMinutes()} menit`;
-    el.etaTo.textContent = out ? 'Pilih titik kampus lain atau alamat yang lebih dekat.' : `Ke ${campus().name}`;
+    el.etaTo.textContent = out
+      ? "Pilih titik kampus lain atau alamat yang lebih dekat."
+      : `Ke ${campus().name}`;
   }
 
   function renderCampusHint() {
     el.campusHint.textContent = `Layanan aktif dalam radius ${C.radiusKm} km · ${campus().address}`;
   }
 
-  function renderFileInfo() {
-    if (!state.file) return;
-    const size = state.file.size >= 1048576
-      ? (state.file.size / 1048576).toFixed(1).replace('.', ',') + ' MB'
-      : Math.max(1, Math.round(state.file.size / 1024)) + ' KB';
-    el.fileSub.textContent = `${size} · ${state.pages} halaman${state.pagesEstimated ? ' (perkiraan)' : ''}`;
-  }
-
   /* ---------- init pilihan ---------- */
-  el.campus.innerHTML = C.campuses.map((c) => `<option value="${c.id}">${c.name}</option>`).join('');
+  el.campus.innerHTML = C.campuses
+    .map((c) => `<option value="${c.id}">${esc(c.name)}</option>`)
+    .join("");
   el.binding.innerHTML = Object.entries(P.binding)
-    .map(([k, b]) => `<option value="${k}">${b.label}${b.price ? ' · ' + rpTight(b.price) : ''}</option>`).join('');
-  el.paper.innerHTML = [['A4', 'A4 · standar'], ['A3', 'A3 · ukuran besar'], ['A5', 'A5 · ukuran kecil']]
-    .map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    .map(
+      ([k, b]) =>
+        `<option value="${k}">${esc(b.label)}${b.price ? " · " + rpTight(b.price) : ""}</option>`,
+    )
+    .join("");
+  el.paperSize.innerHTML = Object.entries(P.sizes)
+    .map(([k, s]) => `<option value="${k}">${esc(s.label)}</option>`)
+    .join("");
+  el.paperType.innerHTML = Object.entries(P.paperTypes)
+    .map(
+      ([k, t]) =>
+        `<option value="${k}">${esc(t.label)}${t.add ? ` · +${rpTight(t.add)}/hlm` : ""}</option>`,
+    )
+    .join("");
+  el.dzSub.textContent = `Maksimal ${C.maxFiles} file · ${C.maxFileMB} MB per file · preview muncul otomatis`;
 
   /* ---------- tujuan & lokasi ---------- */
   function haversineKm(a, b) {
-    const R = 6371, rad = (d) => (d * Math.PI) / 180;
-    const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
-    const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    const R = 6371,
+      rad = (d) => (d * Math.PI) / 180;
+    const dLat = rad(b.lat - a.lat),
+      dLng = rad(b.lng - a.lng);
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(h));
   }
 
   function updateDistance() {
-    if (state.userCoords) {
-      state.distanceKm = haversineKm(state.userCoords, campus()) * C.roadFactor;
-    } else {
-      state.distanceKm = campus().defaultDistanceKm;
-    }
+    state.distanceKm = state.userCoords
+      ? haversineKm(state.userCoords, campus()) * C.roadFactor
+      : campus().defaultDistanceKm;
   }
 
-  el.campus.addEventListener('change', () => {
+  el.campus.addEventListener("change", () => {
     state.campusId = el.campus.value;
     updateDistance();
     renderCampusHint();
     renderSummary();
   });
 
-  el.address.addEventListener('input', () => {
+  el.address.addEventListener("input", () => {
     state.address = el.address.value.trim();
-    el.address.removeAttribute('aria-invalid');
+    el.address.removeAttribute("aria-invalid");
     el.addressError.hidden = true;
   });
 
-  el.btnGeo.addEventListener('click', () => {
+  el.btnGeo.addEventListener("click", () => {
     if (!navigator.geolocation) {
-      el.geoStatus.textContent = 'Browser ini tidak mendukung lokasi. Jarak memakai perkiraan titik antar.';
+      el.geoStatus.textContent =
+        "Browser ini tidak mendukung lokasi. Jarak memakai perkiraan titik antar.";
       return;
     }
     el.btnGeo.disabled = true;
-    el.geoStatus.textContent = 'Membaca lokasimu…';
+    el.geoStatus.textContent = "Membaca lokasimu…";
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        state.userCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        state.userCoords = {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        };
         updateDistance();
         el.btnGeo.disabled = false;
         el.geoStatus.textContent = inRadius()
-          ? 'Lokasi terbaca. Jarak dihitung dari posisimu.'
+          ? "Lokasi terbaca. Jarak dihitung dari posisimu."
           : `Lokasimu sekitar ${kmFmt(state.distanceKm)} dari kampus, di luar radius layanan.`;
         renderSummary();
       },
       () => {
         el.btnGeo.disabled = false;
-        el.geoStatus.textContent = 'Izin lokasi belum diberikan. Jarak tetap memakai perkiraan titik antar.';
+        el.geoStatus.textContent =
+          "Izin lokasi belum diberikan. Jarak tetap memakai perkiraan titik antar.";
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 },
     );
   });
 
-  /* ---------- upload & preview ---------- */
+  /* ============================================================
+     DOKUMEN: banyak file, preview, rentang halaman
+     ============================================================ */
   function showFileError(msg) {
     el.fileError.textContent = msg;
     el.fileError.hidden = !msg;
-    el.dropzone.classList.toggle('is-invalid', !!msg);
+    el.dropzone.classList.toggle("is-invalid", !!msg);
   }
 
-  async function handleFile(file) {
-    showFileError('');
-    if (!file) return;
-    const ext = (file.name.split('.').pop() || '').toLowerCase();
-    if (!['pdf', 'docx'].includes(ext)) {
-      return showFileError('Format belum didukung. Pilih file PDF atau DOCX.');
+  function cardHtml(item) {
+    const id = item.id;
+    return `
+      <article class="file-card" data-id="${id}" data-state="loading">
+        <div class="preview-top">
+          <span class="file-badge">${esc(item.ext.toUpperCase())}</span>
+          <div class="file-meta">
+            <p class="file-name">${esc(item.name)}</p>
+            <p class="file-sub" data-role="sub">Membaca dokumen…</p>
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm" data-act="toggle" aria-expanded="false" disabled>Lihat preview</button>
+          <button type="button" class="icon-btn" data-act="remove" aria-label="Hapus ${esc(item.name)}">×</button>
+        </div>
+        <div class="loading-row" data-role="loading"><span class="spinner"></span>Menyiapkan preview…</div>
+        <div class="file-body" data-role="body" hidden>
+          <div class="range-row">
+            <label for="range-${id}">Halaman yang dicetak</label>
+            <div class="range-ctl">
+              <input class="input" id="range-${id}" data-role="range" type="text" autocomplete="off" spellcheck="false"
+                     placeholder="Kosongkan untuk semua, atau tulis 1-5, 8, 11-13" aria-describedby="rh-${id}">
+              <button type="button" class="chip-btn" data-act="all">Semua</button>
+            </div>
+            <p class="hint" id="rh-${id}" data-role="rangeHint"></p>
+            <p class="field-error" data-role="rangeError" hidden></p>
+          </div>
+          <label class="pages-edit" data-role="pagesEdit" hidden>Perkiraan jumlah halaman
+            <input type="number" data-role="pagesInput" min="1" max="999" inputmode="numeric">
+          </label>
+          <p class="preview-note" data-role="docxNote" hidden>Jumlah halaman DOCX adalah perkiraan. Ubah angkanya jika berbeda dengan dokumenmu.</p>
+          <div class="card-preview" data-role="preview" hidden>
+            <div data-role="slot"></div>
+            <div class="preview-bottom">
+              <div class="pager" data-role="pager">
+                <button type="button" data-act="prev" aria-label="Halaman sebelumnya">‹</button>
+                <span data-role="pageInfo" aria-live="polite"></span>
+                <button type="button" data-act="next" aria-label="Halaman berikutnya">›</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>`;
+  }
+
+  const subText = (f) =>
+    `${sizeText(f.size)} · ${f.pages} halaman${f.estimated ? " (perkiraan)" : ""}`;
+
+  function paintRange(item) {
+    const c = cardOf(item.id);
+    if (!c) return;
+    const input = q(c, "range"),
+      hint = q(c, "rangeHint"),
+      err = q(c, "rangeError");
+    const r = item.range;
+    if (r.ok) {
+      err.hidden = true;
+      input.removeAttribute("aria-invalid");
+      hint.textContent = r.all
+        ? `Mencetak semua ${item.pages} halaman.`
+        : `Mencetak ${r.count} dari ${item.pages} halaman (hal. ${r.label}).`;
+    } else {
+      err.textContent = r.error;
+      err.hidden = false;
+      input.setAttribute("aria-invalid", "true");
+      hint.textContent = "";
     }
-    if (file.size > C.maxFileMB * 1024 * 1024) {
-      return showFileError(`Ukuran file melebihi ${C.maxFileMB} MB. Kecilkan file lalu coba lagi.`);
+  }
+
+  function updatePager(item) {
+    const c = cardOf(item.id);
+    if (!c) return;
+    q(c, "pageInfo").textContent =
+      `Halaman ${item.ctl.page} dari ${item.pages}`;
+    c.querySelector('[data-act="prev"]').disabled = item.ctl.page <= 1;
+    c.querySelector('[data-act="next"]').disabled = item.ctl.page >= item.pages;
+  }
+
+  function updateCard(item) {
+    const c = cardOf(item.id);
+    if (!c) return;
+    c.dataset.state = item.loading ? "loading" : "ready";
+    q(c, "loading").hidden = !item.loading;
+    q(c, "body").hidden = !!item.loading;
+    c.querySelector('[data-act="toggle"]').disabled = !!item.loading;
+    if (item.loading) return;
+    q(c, "sub").textContent = subText(item);
+    q(c, "pagesEdit").hidden = !item.estimated;
+    q(c, "docxNote").hidden = !item.estimated;
+    q(c, "pager").hidden = item.kind !== "pdf";
+    q(c, "pagesInput").value = item.pages;
+    paintRange(item);
+  }
+
+  function addFile(file, ext) {
+    const item = {
+      id: "f" + ++seq,
+      name: file.name,
+      size: file.size,
+      ext,
+      kind: ext === "pdf" ? "pdf" : "docx",
+      pages: 0,
+      estimated: false,
+      loading: true,
+      expanded: false,
+      rangeText: "",
+      range: { ok: true, all: true, count: 0, label: "Semua" },
+      ctl: window.KilatPreview.create(),
+      settings: { ...state.defaults },
+    };
+    state.files.push(item);
+    el.fileList.insertAdjacentHTML("beforeend", cardHtml(item));
+    state.activeId = item.id;
+    renderTabs();
+    syncForm();
+    renderSummary();
+
+    return item.ctl
+      .open(file)
+      .then((info) => {
+        if (!state.files.includes(item)) {
+          item.ctl.close();
+          return null;
+        } // dihapus saat masih dibaca
+        item.pages = info.pages;
+        item.estimated = info.estimated;
+        item.kind = info.kind;
+        item.loading = false;
+        item.range = RG.parse("", item.pages);
+        updateCard(item);
+        renderSummary();
+        return null;
+      })
+      .catch((err) => {
+        removeItem(item.id);
+        return `${file.name}: ${(err && err.message) || "File tidak bisa dibuka. Coba file lain."}`;
+      });
+  }
+
+  async function handleFiles(list) {
+    showFileError("");
+    const incoming = [...list];
+    if (!incoming.length) return;
+    const errors = [];
+    const jobs = [];
+    for (const file of incoming) {
+      if (state.files.length >= C.maxFiles) {
+        errors.push(`Maksimal ${C.maxFiles} file per pesanan.`);
+        break;
+      }
+      const ext = (file.name.split(".").pop() || "").toLowerCase();
+      if (!["pdf", "docx"].includes(ext)) {
+        errors.push(
+          `${file.name}: format belum didukung, pilih PDF atau DOCX.`,
+        );
+        continue;
+      }
+      if (file.size > C.maxFileMB * 1024 * 1024) {
+        errors.push(`${file.name}: ukuran melebihi ${C.maxFileMB} MB.`);
+        continue;
+      }
+      jobs.push(addFile(file, ext));
     }
+    const results = await Promise.all(jobs);
+    results.filter(Boolean).forEach((m) => errors.push(m));
+    showFileError(errors.join(" "));
+  }
 
-    el.preview.hidden = false;
-    el.stage.innerHTML = '<div class="loading-row"><span class="spinner"></span>Menyiapkan preview…</div>';
-    el.fileBadge.textContent = ext.toUpperCase();
-    el.fileName.textContent = file.name;
-    el.fileSub.textContent = 'Membaca dokumen…';
+  function removeItem(id) {
+    const i = state.files.findIndex((f) => f.id === id);
+    if (i < 0) return;
+    const [item] = state.files.splice(i, 1);
+    item.ctl.close();
+    const c = cardOf(id);
+    if (c) c.remove();
+    if (state.activeId === id) {
+      state.activeId = state.files.length
+        ? state.files[Math.min(i, state.files.length - 1)].id
+        : null;
+    }
+    renderTabs();
+    syncForm();
+    renderSummary();
+  }
 
-    try {
-      const info = await window.KilatPreview.open(file, el.stage);
-      state.file = { name: file.name, size: file.size, ext };
-      state.pages = info.pages;
-      state.pagesEstimated = info.estimated;
-
-      const isPdf = info.kind === 'pdf';
-      el.pager.hidden = !isPdf;
-      el.pagesEdit.hidden = isPdf;
-      el.previewNote.hidden = isPdf;
-      el.pagesInput.value = state.pages;
-      updatePager(1);
-      renderFileInfo();
-      renderSummary();
-    } catch (err) {
-      resetFile();
-      showFileError('File tidak bisa dibuka. ' + (err && err.message ? err.message : 'Coba file lain.'));
+  async function togglePreview(item, c, btn) {
+    item.expanded = !item.expanded;
+    btn.setAttribute("aria-expanded", String(item.expanded));
+    btn.textContent = item.expanded ? "Tutup preview" : "Lihat preview";
+    q(c, "preview").hidden = !item.expanded;
+    if (item.expanded) {
+      const slot = q(c, "slot");
+      if (!slot.contains(item.ctl.stage)) slot.appendChild(item.ctl.stage);
+      try {
+        await item.ctl.refit();
+      } catch (e) {
+        /* preview tetap tampil walau gagal dirender ulang */
+      }
+      updatePager(item);
     }
   }
 
-  function updatePager(n) {
-    el.pageInfo.textContent = `Halaman ${n} dari ${state.pages}`;
-    el.prev.disabled = n <= 1;
-    el.next.disabled = n >= state.pages;
+  async function turnPage(item, delta) {
+    await item.ctl.goTo(item.ctl.page + delta);
+    updatePager(item);
   }
 
-  async function goPage(delta) {
-    const target = window.KilatPreview.page + delta;
-    el.prev.disabled = el.next.disabled = true;
-    const now = await window.KilatPreview.goTo(target);
-    updatePager(now);
+  function setRange(item, text) {
+    item.rangeText = text;
+    item.range = RG.parse(text, item.pages);
+    paintRange(item);
+    renderSummary();
   }
-  el.prev.addEventListener('click', () => goPage(-1));
-  el.next.addEventListener('click', () => goPage(1));
 
-  el.pagesInput.addEventListener('input', () => {
-    const v = parseInt(el.pagesInput.value, 10);
-    if (v >= 1 && v <= 999) {
-      state.pages = v;
-      renderFileInfo();
-      renderSummary();
+  el.fileList.addEventListener("click", async (e) => {
+    const c = e.target.closest(".file-card");
+    if (!c) return;
+    const item = itemOf(c.dataset.id);
+    if (!item) return;
+    const btn = e.target.closest("[data-act]");
+    if (btn) {
+      switch (btn.dataset.act) {
+        case "remove":
+          removeItem(item.id);
+          return;
+        case "toggle":
+          await togglePreview(item, c, btn);
+          break;
+        case "prev":
+          await turnPage(item, -1);
+          break;
+        case "next":
+          await turnPage(item, 1);
+          break;
+        case "all":
+          q(c, "range").value = "";
+          setRange(item, "");
+          break;
+        default:
+          break;
+      }
+    }
+    setActive(item.id);
+  });
+
+  el.fileList.addEventListener("focusin", (e) => {
+    const c = e.target.closest(".file-card");
+    if (c) setActive(c.dataset.id);
+  });
+
+  el.fileList.addEventListener("input", (e) => {
+    const t = e.target;
+    const c = t.closest(".file-card");
+    const item = c && itemOf(c.dataset.id);
+    if (!item) return;
+    if (t.dataset.role === "range") {
+      setRange(item, t.value);
+    } else if (t.dataset.role === "pagesInput") {
+      const v = parseInt(t.value, 10);
+      if (v >= 1 && v <= 999) {
+        item.pages = v;
+        q(c, "sub").textContent = subText(item);
+        setRange(item, item.rangeText);
+      }
     }
   });
 
-  function resetFile() {
-    window.KilatPreview.close();
-    state.file = null;
-    state.pages = 0;
-    state.pagesEstimated = false;
-    el.file.value = '';
-    el.preview.hidden = true;
+  // Saat kolom rentang ditinggalkan, rapikan tulisannya ("1-3,5" jadi "1-3, 5")
+  el.fileList.addEventListener("focusout", (e) => {
+    const t = e.target;
+    if (!t.dataset || t.dataset.role !== "range") return;
+    const c = t.closest(".file-card");
+    const item = c && itemOf(c.dataset.id);
+    if (item && item.range.ok && !item.range.all) {
+      t.value = item.range.label;
+      item.rangeText = item.range.label;
+    }
+  });
+
+  el.file.addEventListener("change", () => {
+    handleFiles(el.file.files);
+    try {
+      el.file.value = "";
+    } catch (e) {
+      /* abaikan */
+    }
+  });
+  ["dragenter", "dragover"].forEach((ev) =>
+    el.dropzone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      el.dropzone.classList.add("is-drag");
+    }),
+  );
+  ["dragleave", "drop"].forEach((ev) =>
+    el.dropzone.addEventListener(ev, (e) => {
+      e.preventDefault();
+      el.dropzone.classList.remove("is-drag");
+    }),
+  );
+  el.dropzone.addEventListener("drop", (e) =>
+    handleFiles(e.dataTransfer.files),
+  );
+
+  /* ============================================================
+     DETAIL CETAK: pengaturan per file
+     ============================================================ */
+  const activeSettings = () => {
+    const f = itemOf(state.activeId);
+    return f ? f.settings : state.defaults;
+  };
+
+  function renderTabs() {
+    const multi = state.files.length > 1;
+    el.tabsWrap.hidden = !multi;
+    el.applyRow.hidden = !multi;
+    el.fileTabs.innerHTML = state.files
+      .map(
+        (f) =>
+          `<button type="button" class="tab" data-tab="${f.id}" aria-pressed="${f.id === state.activeId}" title="${esc(f.name)}">${esc(shortName(f.name, 24))}</button>`,
+      )
+      .join("");
+    el.fileList
+      .querySelectorAll(".file-card")
+      .forEach((c) =>
+        c.classList.toggle(
+          "is-active",
+          multi && c.dataset.id === state.activeId,
+        ),
+      );
+  }
+
+  function setActive(id) {
+    if (state.activeId === id) return;
+    state.activeId = id;
+    renderTabs();
+    syncForm();
+  }
+
+  el.fileTabs.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-tab]");
+    if (b) setActive(b.dataset.tab);
+  });
+
+  function syncForm() {
+    const s = PR.normalize(activeSettings());
+    const t = P.paperTypes[s.paperType];
+    colorRadios.forEach((r) => {
+      r.checked = r.value === s.color;
+      r.disabled = !!t.colorOnly && r.value === "bw";
+    });
+    sidesRadios.forEach((r) => {
+      r.checked = r.value === s.sides;
+      r.disabled = !!t.singleOnly && r.value === "duplex";
+    });
+    el.paperSize.value = s.paper;
+    el.paperType.value = s.paperType;
+    el.binding.value = s.binding;
+    el.copies.value = s.copies;
+
+    const notes = [];
+    if (t.colorOnly) notes.push("berwarna");
+    if (t.singleOnly) notes.push("1 sisi");
+    if (notes.length)
+      el.paperHint.textContent = `${V.typeLabel(s.paperType)} hanya bisa dicetak ${notes.join(" dan ")}, jadi pengaturan disesuaikan otomatis.`;
+    else if (t.add)
+      el.paperHint.textContent = `${V.typeLabel(s.paperType)} menambah ${rpTight(t.add)} per halaman (belum termasuk pengali ukuran kertas).`;
+    else el.paperHint.textContent = "";
+  }
+
+  function updateSettings(patch) {
+    const target = activeSettings();
+    Object.assign(target, patch);
+    Object.assign(target, PR.normalize(target));
+    state.defaults = { ...target };
+    syncForm();
     renderSummary();
   }
-  el.btnRemove.addEventListener('click', () => { showFileError(''); resetFile(); });
-  el.file.addEventListener('change', () => handleFile(el.file.files[0]));
 
-  ['dragenter', 'dragover'].forEach((ev) =>
-    el.dropzone.addEventListener(ev, (e) => { e.preventDefault(); el.dropzone.classList.add('is-drag'); }));
-  ['dragleave', 'drop'].forEach((ev) =>
-    el.dropzone.addEventListener(ev, (e) => { e.preventDefault(); el.dropzone.classList.remove('is-drag'); }));
-  el.dropzone.addEventListener('drop', (e) => handleFile(e.dataTransfer.files[0]));
-
-  /* ---------- detail cetak ---------- */
-  document.querySelectorAll('input[name="color"]').forEach((r) =>
-    r.addEventListener('change', () => { state.color = r.value; renderSummary(); }));
-  document.querySelectorAll('input[name="sides"]').forEach((r) =>
-    r.addEventListener('change', () => { state.sides = r.value; renderSummary(); }));
-  el.binding.addEventListener('change', () => { state.binding = el.binding.value; renderSummary(); });
-  el.paper.addEventListener('change', () => { state.paper = el.paper.value; renderSummary(); });
+  colorRadios.forEach((r) =>
+    r.addEventListener("change", () => {
+      if (r.checked) updateSettings({ color: r.value });
+    }),
+  );
+  sidesRadios.forEach((r) =>
+    r.addEventListener("change", () => {
+      if (r.checked) updateSettings({ sides: r.value });
+    }),
+  );
+  el.paperSize.addEventListener("change", () =>
+    updateSettings({ paper: el.paperSize.value }),
+  );
+  el.paperType.addEventListener("change", () =>
+    updateSettings({ paperType: el.paperType.value }),
+  );
+  el.binding.addEventListener("change", () =>
+    updateSettings({ binding: el.binding.value }),
+  );
 
   function setCopies(v) {
     const n = Math.min(C.maxCopies, Math.max(1, parseInt(v, 10) || 1));
-    state.copies = n;
-    el.copies.value = n;
-    renderSummary();
+    updateSettings({ copies: n });
   }
-  el.copies.addEventListener('input', () => {
-    if (el.copies.value !== '') setCopies(el.copies.value);
+  el.copies.addEventListener("input", () => {
+    if (el.copies.value !== "") setCopies(el.copies.value);
   });
-  el.copies.addEventListener('blur', () => setCopies(el.copies.value));
-  el.copiesMinus.addEventListener('click', () => setCopies(state.copies - 1));
-  el.copiesPlus.addEventListener('click', () => setCopies(state.copies + 1));
+  el.copies.addEventListener("blur", () => setCopies(el.copies.value));
+  el.copiesMinus.addEventListener("click", () =>
+    setCopies(activeSettings().copies - 1),
+  );
+  el.copiesPlus.addEventListener("click", () =>
+    setCopies(activeSettings().copies + 1),
+  );
+
+  el.btnApplyAll.addEventListener("click", () => {
+    const s = { ...activeSettings() };
+    state.files.forEach((f) => {
+      f.settings = { ...s };
+    });
+    renderSummary();
+    el.btnApplyAll.textContent = "Sudah diterapkan ✓";
+    setTimeout(() => {
+      el.btnApplyAll.textContent = "Terapkan pengaturan ini ke semua file";
+    }, 1600);
+  });
 
   /* ---------- validasi ---------- */
   function validate() {
     const problems = [];
+    const notes = [];
     if (state.address.length < 5) {
-      el.address.setAttribute('aria-invalid', 'true');
-      el.addressError.textContent = 'Isi alamat lengkap dan patokan agar kurir mudah menemukanmu.';
+      el.address.setAttribute("aria-invalid", "true");
+      el.addressError.textContent =
+        "Isi alamat lengkap dan patokan agar kurir mudah menemukanmu.";
       el.addressError.hidden = false;
-      problems.push({ node: el.address, msg: 'alamat penerima' });
+      problems.push({ node: el.address, msg: "alamat penerima" });
     }
-    if (!state.file) {
-      showFileError('Upload dokumen PDF atau DOCX dulu.');
-      problems.push({ node: el.dropzone, msg: 'file dokumen' });
+    if (!state.files.length) {
+      showFileError("Upload dokumen PDF atau DOCX dulu.");
+      problems.push({ node: el.dropzone, msg: "file dokumen" });
+    } else {
+      if (state.files.some((f) => f.loading)) {
+        notes.push("Tunggu sampai semua dokumen selesai dibaca.");
+        problems.push({ node: el.fileList, msg: null });
+      }
+      const bad = state.files.find((f) => !f.loading && !f.range.ok);
+      if (bad) {
+        setActive(bad.id);
+        problems.push({
+          node: q(cardOf(bad.id), "range"),
+          msg: `rentang halaman ${bad.name}`,
+        });
+      }
     }
-    if (state.file && state.pages < 1) {
-      problems.push({ node: el.pagesInput, msg: 'jumlah halaman' });
-    }
-    return problems;
+    return { problems, notes };
   }
 
-  /* ---------- QRIS dummy ---------- */
+  /* ============================================================
+     QRIS dummy & pembayaran
+     ============================================================ */
   function mulberry32(a) {
     return function () {
-      a |= 0; a = (a + 0x6d2b79f5) | 0;
+      a |= 0;
+      a = (a + 0x6d2b79f5) | 0;
       let t = Math.imul(a ^ (a >>> 15), 1 | a);
       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -297,7 +743,8 @@
       (x < 8 && y < 8) || (x >= N - 8 && y < 8) || (x < 8 && y >= N - 8);
     for (let y = 0; y < N; y++) {
       for (let x = 0; x < N; x++) {
-        if (!inFinder(x, y) && rnd() > 0.52) cells.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
+        if (!inFinder(x, y) && rnd() > 0.52)
+          cells.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
       }
     }
     const finder = (ox, oy) =>
@@ -306,33 +753,64 @@
       `<rect x="${ox + 2}" y="${oy + 2}" width="3" height="3" rx=".6"/>`;
     el.qr.innerHTML =
       `<svg viewBox="-1 -1 ${N + 2} ${N + 2}" fill="#0f2419" shape-rendering="crispEdges" aria-hidden="true">` +
-      cells.join('') + finder(0, 0) + finder(N - 7, 0) + finder(0, N - 7) + '</svg>';
+      cells.join("") +
+      finder(0, 0) +
+      finder(N - 7, 0) +
+      finder(0, N - 7) +
+      "</svg>";
   }
 
   let timerId = null;
   let lastFocus = null;
   let pendingId = null; // pesanan berstatus 'pending' yang dibuat saat QRIS ditampilkan
 
+  function buildOrder() {
+    const calc = priceOrder();
+    return {
+      campus: { id: campus().id, name: campus().name },
+      address: state.address,
+      distanceKm: Number(state.distanceKm.toFixed(2)),
+      etaMin: etaMinutes(),
+      files: state.files.map((f, i) => ({
+        name: f.name,
+        size: f.size,
+        pages: f.pages,
+        range: f.range.all ? "Semua" : f.range.label,
+        printPages: f.range.count,
+        options: PR.normalize(f.settings),
+        price: { print: calc.items[i].print, binding: calc.items[i].binding },
+      })),
+      price: {
+        print: calc.print,
+        binding: calc.binding,
+        delivery: calc.delivery,
+        platform: calc.platform,
+        total: calc.total,
+      },
+    };
+  }
+
   async function openPay() {
     // Simpan pesanan sebagai 'menunggu pembayaran'. Jika pelanggan batal, admin tetap bisa melihatnya.
     const data = buildOrder();
-    const existing = pendingId ? await window.KilatDB.updateOrder(pendingId, data) : null;
+    const existing = pendingId
+      ? await window.KilatDB.updateOrder(pendingId, data)
+      : null;
     if (!existing) {
       const created = await window.KilatDB.createOrder(data);
       pendingId = created.id;
     }
-    const c = calc();
-    drawQr(`KILAT-${Date.now()}-${c.total}`);
-    el.payAmount.textContent = rp(c.total);
+    drawQr(`KILAT-${Date.now()}-${data.price.total}`);
+    el.payAmount.textContent = rp(data.price.total);
     el.payView.hidden = false;
     el.paySuccess.hidden = true;
     el.btnPaid.disabled = false;
-    el.btnPaid.textContent = 'Simulasikan pembayaran berhasil';
+    el.btnPaid.textContent = "Simulasikan pembayaran berhasil";
 
     let left = 300;
     const paint = () => {
-      const m = String(Math.floor(left / 60)).padStart(2, '0');
-      const s = String(left % 60).padStart(2, '0');
+      const m = String(Math.floor(left / 60)).padStart(2, "0");
+      const s = String(left % 60).padStart(2, "0");
       el.payTimer.textContent = `${m}:${s}`;
     };
     paint();
@@ -342,53 +820,51 @@
       paint();
       if (left <= 0) {
         closePay();
-        el.formError.textContent = 'Waktu pembayaran habis. Tekan "Lanjut ke pembayaran" untuk membuat QRIS baru.';
+        el.formError.textContent =
+          'Waktu pembayaran habis. Tekan "Lanjut ke pembayaran" untuk membuat QRIS baru.';
         el.formError.hidden = false;
       }
     }, 1000);
 
     lastFocus = document.activeElement;
     el.modal.hidden = false;
-    document.body.classList.add('modal-open');
+    document.body.classList.add("modal-open");
     el.btnPaid.focus();
   }
 
   function closePay() {
     clearInterval(timerId);
     el.modal.hidden = true;
-    document.body.classList.remove('modal-open');
+    document.body.classList.remove("modal-open");
     if (lastFocus) lastFocus.focus();
   }
 
-  el.modal.addEventListener('click', (e) => { if (e.target.closest('[data-close]')) closePay(); });
-  document.addEventListener('keydown', (e) => {
+  el.modal.addEventListener("click", (e) => {
+    if (e.target.closest("[data-close]")) closePay();
+  });
+  document.addEventListener("keydown", (e) => {
     if (el.modal.hidden) return;
-    if (e.key === 'Escape' && !el.payView.hidden) closePay();
-    if (e.key === 'Tab') {
-      const f = [...el.modal.querySelectorAll('button:not([disabled])')].filter((n) => n.offsetParent !== null);
+    if (e.key === "Escape" && !el.payView.hidden) closePay();
+    if (e.key === "Tab") {
+      const f = [...el.modal.querySelectorAll("button:not([disabled])")].filter(
+        (n) => n.offsetParent !== null,
+      );
       if (!f.length) return;
-      const first = f[0], last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
-      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      const first = f[0],
+        last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   });
 
-  function buildOrder() {
-    const c = calc();
-    return {
-      campus: { id: campus().id, name: campus().name },
-      address: state.address,
-      distanceKm: Number(state.distanceKm.toFixed(2)),
-      etaMin: etaMinutes(),
-      file: { name: state.file.name, size: state.file.size, pages: state.pages },
-      options: { color: state.color, sides: state.sides, paper: state.paper, binding: state.binding, copies: state.copies },
-      price: c
-    };
-  }
-
-  el.btnPaid.addEventListener('click', async () => {
+  el.btnPaid.addEventListener("click", async () => {
     el.btnPaid.disabled = true;
-    el.btnPaid.textContent = 'Memeriksa pembayaran…';
+    el.btnPaid.textContent = "Memeriksa pembayaran…";
     await sleep(1400);
     clearInterval(timerId);
     let order = pendingId ? await window.KilatDB.markPaid(pendingId) : null;
@@ -399,22 +875,28 @@
     el.payView.hidden = true;
     el.paySuccess.hidden = false;
     await sleep(1300);
-    window.location.href = 'tracking.html?id=' + encodeURIComponent(order.id);
+    window.location.href = "tracking.html?id=" + encodeURIComponent(order.id);
   });
 
   /* ---------- tombol utama ---------- */
-  el.btnPay.addEventListener('click', () => {
+  el.btnPay.addEventListener("click", () => {
     el.formError.hidden = true;
-    const problems = validate();
+    const { problems, notes } = validate();
     const msgs = [];
-    if (problems.length) msgs.push('Lengkapi dulu: ' + problems.map((p) => p.msg).join(', ') + '.');
-    if (!inRadius()) msgs.push(`Alamatmu di luar radius ${C.radiusKm} km dari kampus, jadi belum bisa kami antar.`);
+    const named = problems.filter((p) => p.msg).map((p) => p.msg);
+    if (named.length) msgs.push("Lengkapi dulu: " + named.join(", ") + ".");
+    msgs.push(...notes);
+    if (!inRadius())
+      msgs.push(
+        `Alamatmu di luar radius ${C.radiusKm} km dari kampus, jadi belum bisa kami antar.`,
+      );
     if (msgs.length) {
-      el.formError.textContent = msgs.join(' ');
+      el.formError.textContent = msgs.join(" ");
       el.formError.hidden = false;
       const target = problems.length ? problems[0].node : el.address;
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (target.focus && target !== el.dropzone) target.focus({ preventScroll: true });
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (target.focus && target !== el.dropzone && target !== el.fileList)
+        target.focus({ preventScroll: true });
       return;
     }
     openPay();
@@ -422,5 +904,7 @@
 
   /* ---------- mulai ---------- */
   renderCampusHint();
+  syncForm();
+  renderTabs();
   renderSummary();
 })();

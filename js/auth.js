@@ -8,39 +8,51 @@
    Untuk produksi gunakan autentikasi server (Supabase Auth, Firebase Auth, dll.)
    ============================================================ */
 window.KilatAuth = (() => {
-  const KEY = 'printkilat.session.v1';
+  const KEY = "printkilat.session.v1";
   const C = window.KILAT_CONFIG;
 
   const current = () => {
-    try { return JSON.parse(sessionStorage.getItem(KEY)); }
-    catch { return null; }
+    try {
+      return JSON.parse(sessionStorage.getItem(KEY));
+    } catch {
+      return null;
+    }
   };
 
   return {
     current,
-    home: (role) => (role === 'admin' ? 'admin.html' : 'courier.html'),
+    home: (role) => (role === "admin" ? "admin.html" : "courier.html"),
 
     login(username, password) {
-      const u = C.staff.find((s) => s.username === String(username).trim().toLowerCase() && s.password === password);
+      const u = C.staff.find(
+        (s) =>
+          s.username === String(username).trim().toLowerCase() &&
+          s.password === password,
+      );
       if (!u) return null;
-      const session = { username: u.username, role: u.role, name: u.name, label: u.label };
+      const session = {
+        username: u.username,
+        role: u.role,
+        name: u.name,
+        label: u.label,
+      };
       sessionStorage.setItem(KEY, JSON.stringify(session));
       return session;
     },
 
     logout() {
       sessionStorage.removeItem(KEY);
-      window.location.replace('login.html');
+      window.location.replace("login.html");
     },
 
     /** Panggil di <head> halaman terlindungi. Mengalihkan ke login bila peran tidak sesuai. */
     guard(role) {
       const s = current();
       if (!s || s.role !== role) {
-        window.location.replace('login.html');
+        window.location.replace("login.html");
         return null;
       }
       return s;
-    }
+    },
   };
 })();

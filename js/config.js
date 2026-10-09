@@ -41,22 +41,53 @@ window.KILAT_CONFIG = {
   pricing: {
     // Harga per halaman untuk kertas A4, 1 sisi
     perPage: { bw: 500, color: 1500 },
-    // Pengali harga menurut ukuran kertas
-    sizeMultiplier: { A5: 0.6, A4: 1, A3: 2 },
+    // Ukuran kertas: mult = pengali harga terhadap A4
+    sizes: {
+      A5: { label: "A5 · kecil", mult: 0.6 },
+      B5: { label: "B5", mult: 0.8 },
+      A4: { label: "A4 · standar", mult: 1 },
+      F4: { label: "F4 / Folio", mult: 1.1 },
+      Letter: { label: "Letter", mult: 1 },
+      A3: { label: "A3 · ukuran besar", mult: 2 },
+    },
+    // Jenis kertas: add = tambahan harga per halaman (sebelum pengali ukuran).
+    // colorOnly / singleOnly = jenis kertas ini hanya bisa dicetak berwarna / 1 sisi.
+    paperTypes: {
+      hvs70: { label: "HVS 70 gsm · standar", add: 0 },
+      hvs80: { label: "HVS 80 gsm", add: 100 },
+      art120: { label: "Art paper 120 gsm", add: 700 },
+      art150: { label: "Art paper 150 gsm", add: 1000 },
+      carton260: { label: "Art carton 260 gsm · cover", add: 2000 },
+      photo: {
+        label: "Kertas foto glossy",
+        add: 2500,
+        colorOnly: true,
+        singleOnly: true,
+      },
+    },
     // Potongan untuk cetak bolak-balik
     duplexDiscount: 0.1,
     // Harga jilid dihitung per salinan
     binding: {
       none: { label: "Tanpa jilid", price: 0 },
-      staples: { label: "Staples", price: 2000 },
-      spiral: { label: "Jilid spiral", price: 7000 },
+      staples: { label: "Staples", price: 1000 },
+      spiral: { label: "Jilid spiral", price: 5000 },
     },
-    deliveryFee: 6000,
-    platformFee: 2000,
+    deliveryFee: 5000,
+    platformFee: 1000,
   },
 
   maxFileMB: 10,
+  maxFiles: 5, // jumlah file maksimal dalam satu pesanan
   maxCopies: 99,
+
+  // Kontak untuk pertanyaan keamanan / permintaan hapus data (tampil di halaman keamanan.html jika diisi)
+  supportContact: "",
+
+  // Tautan sosial media di footer. Kosongkan yang tidak dipakai; ikon hanya tampil jika terisi.
+  // instagram: alamat lengkap, mis. 'https://instagram.com/akunmu'
+  // whatsapp : nomor dengan kode negara tanpa +, mis. '6281234567890'
+  social: { instagram: "", whatsapp: "" },
 
   // ---------- Akun staf (PROTOTYPE) ----------
   // PENTING: file ini bisa dibaca siapa pun yang membuka situsmu, jadi login ini

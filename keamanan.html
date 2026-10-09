@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Jaminan Keamanan - Print Kilat</title>
+    <meta
+      name="description"
+      content="Apa yang dilakukan Print Kilat untuk menjaga dokumen dan data pelanggan, apa yang sudah berlaku di prototype, dan apa yang direncanakan."
+    />
+    <meta name="theme-color" content="#0e8f5c" />
+    <link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container">
+        <a class="logo" href="index.html" aria-label="Print Kilat, ke beranda">
+          <img
+            class="logo-img"
+            src="assets/logo.svg"
+            alt=""
+            width="40"
+            height="40"
+          />
+          <span class="logo-text">Print Kilat</span>
+        </a>
+        <nav class="nav" aria-label="Navigasi utama">
+          <a class="btn btn-primary btn-sm" href="order.html">Mulai pesanan</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="container doc-page">
+      <a class="back" href="index.html">← Beranda</a>
+      <h1>Jaminan keamanan</h1>
+      <p class="lead">
+        Dokumen kuliah, data diri, dan alamatmu layak dijaga. Halaman ini
+        menjelaskan apa yang sudah berlaku, apa yang sedang direncanakan untuk,
+        dan apa batasannya.
+      </p>
+
+      <div class="sec-grid">
+        <article class="card">
+          <span class="icon-badge"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="3" y="4" width="18" height="12" rx="2" />
+              <path d="M8 20h8M12 16v4" /></svg
+          ></span>
+          <h3>Diproses di perangkatmu</h3>
+          <p>
+            Preview dan penghitungan halaman berjalan di browser. Isi dokumen
+            tidak diunggah dan disimpan.
+          </p>
+        </article>
+        <article class="card">
+          <span class="icon-badge"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <rect x="4" y="10" width="16" height="11" rx="3" />
+              <path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg
+          ></span>
+          <h3>Kode serah terima</h3>
+          <p>
+            Pesanan baru dianggap selesai setelah kurir memasukkan kode 4 digit
+            yang hanya kamu pegang.
+          </p>
+        </article>
+        <article class="card">
+          <span class="icon-badge"
+            ><svg
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <ellipse cx="12" cy="5" rx="8" ry="3" />
+              <path
+                d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"
+              /></svg
+          ></span>
+          <h3>Data seminimal mungkin</h3>
+          <p>
+            Tidak ada akun pelanggan, password, atau data kartu. Hanya yang
+            dibutuhkan untuk mengantar pesanan.
+          </p>
+        </article>
+      </div>
+
+      <h2 id="aktif">
+        Sudah diimplementasikan <span class="badge-live">Aktif</span>
+      </h2>
+      <ul class="check-list">
+        <li>
+          <div>
+            <b>Dokumen dibaca di browser</b
+            ><span class="desc"
+              >Preview PDF dan DOCX dibuat langsung di perangkatmu. Prototype
+              ini tidak memiliki server penyimpanan file, jadi isi dokumen tidak
+              dikirim ke mana pun.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Yang disimpan hanya data pesanan</b
+            ><span class="desc"
+              >Nama file, ukuran, jumlah dan rentang halaman, pengaturan cetak,
+              alamat antar, dan status. Data ini tersimpan di browser perangkat
+              yang kamu pakai memesan.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Serah terima dengan kode</b
+            ><span class="desc"
+              >Kode 4 digit dibuat acak saat pembayaran dan hanya tampil di
+              halaman pelacakanmu. Kode tidak muncul di dashboard kurir maupun
+              admin, dan kurir tidak bisa menandai "sampai" tanpa kode yang
+              benar.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Satu pesanan, satu kurir</b
+            ><span class="desc"
+              >Begitu seorang kurir mengambil pesananmu, kurir lain tidak bisa
+              melihat atau mengubahnya.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Kamu bisa menghapus file</b
+            ><span class="desc"
+              >Sebelum membayar, setiap file bisa dihapus dari daftar pesananmu
+              kapan saja.</span
+            >
+          </div>
+        </li>
+      </ul>
+
+      <h2 id="rencana">
+        Rencana untuk versi rilis <span class="badge-plan">Belum aktif</span>
+      </h2>
+      <ul class="check-list">
+        <li>
+          <div>
+            <b>Unggah terenkripsi, penyimpanan privat</b
+            ><span class="desc"
+              >File dikirim lewat HTTPS dan disimpan di penyimpanan privat yang
+              terenkripsi, tanpa tautan publik.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Akses file dibatasi per pesanan</b
+            ><span class="desc"
+              >Hanya petugas yang ditugaskan pada pesananmu yang dapat membuka
+              filenya.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Dihapus otomatis maksimal 24 jam setelah selesai</b
+            ><span class="desc"
+              >File dihapus dari penyimpanan setelah pesanan selesai atau
+              dibatalkan.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Hasil cetak dalam amplop tertutup</b
+            ><span class="desc"
+              >Diberi label kode pesanan saja, tanpa nama file atau isi
+              dokumen.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Pembayaran lewat penyedia berizin</b
+            ><span class="desc"
+              >Print Kilat tidak menyimpan data kartu atau rekening.</span
+            >
+          </div>
+        </li>
+        <li>
+          <div>
+            <b>Login staf sungguhan</b
+            ><span class="desc"
+              >Akun terpisah per orang dengan hak akses sesuai peran,
+              menggantikan akun demo.</span
+            >
+          </div>
+        </li>
+      </ul>
+
+      <h2 id="kode">Cara kerja kode serah terima</h2>
+      <ol class="steps-inline">
+        <li>
+          Setelah pembayaran berhasil, kode 4 digit muncul di halaman
+          pelacakanmu.
+        </li>
+        <li>
+          Saat kurir tiba dan hasil cetak sudah di depanmu, sebutkan kodenya.
+        </li>
+        <li>
+          Kurir memasukkan kode itu di dashboard-nya. Hanya kode yang benar yang
+          membuat pesanan berstatus Selesai.
+        </li>
+      </ol>
+
+      <h2 id="batasan">Batasan yang perlu kamu tahu</h2>
+      <div class="honest">
+        <b>Ini masih prototype, bukan layanan yang sudah berjalan.</b>
+        <ul>
+          <li>Gunakan dokumen contoh dan alamat fiktif saat mencoba.</li>
+          <li>
+            Login admin dan kurir bersifat demo, belum menggunakan server.
+          </li>
+          <li>
+            Data pesanan tersimpan di browser tempat kamu memesan, bukan di
+            server.
+          </li>
+          <li>Poin di bagian "Rencana" belum diterapkan.</li>
+        </ul>
+      </div>
+
+      <p id="contact" class="hint" style="margin-top: 28px" hidden></p>
+    </main>
+
+    <footer class="site-footer" id="site-footer">
+      <noscript
+        ><div class="container kf-nojs">
+          Print Kilat · <a href="index.html">Beranda</a> ·
+          <a href="order.html">Mulai pesanan</a> ·
+          <a href="keamanan.html">Keamanan</a> ·
+          <a href="login.html">Masuk staf</a>
+        </div></noscript
+      >
+    </footer>
+
+    <script src="js/config.js"></script>
+    <script src="js/footer.js"></script>
+    <script>
+      (function () {
+        var c = window.KILAT_CONFIG && window.KILAT_CONFIG.supportContact;
+        if (!c) return;
+        var p = document.getElementById("contact");
+        p.textContent = "Pertanyaan keamanan atau permintaan hapus data: " + c;
+        p.hidden = false;
+      })();
+    </script>
+  </body>
+</html>
