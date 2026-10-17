@@ -53,6 +53,9 @@
   const state = {
     campusId: C.campuses[0].id,
     address: "",
+    phone: "", // teks mentah dari kolom; diperiksa lewat V.parsePhone()
+    promoCode: null, // kode promo yang sedang dipakai (sudah lolos pemeriksaan)
+    promoUses: {}, // jumlah pemakaian kode di perangkat ini (untuk promo sekali pakai)
     distanceKm: C.campuses[0].defaultDistanceKm,
     userCoords: null, // diisi jika pelanggan membagikan lokasi
     files: [], // lihat addFile() untuk bentuk item
@@ -67,6 +70,11 @@
     campusHint: $("#campusHint"),
     address: $("#address"),
     addressError: $("#addressError"),
+    phone: $("#phone"),
+    phoneError: $("#phoneError"),
+    promoInput: $("#promoInput"),
+    btnPromo: $("#btnPromo"),
+    promoMsg: $("#promoMsg"),
     btnGeo: $("#btnGeo"),
     geoStatus: $("#geoStatus"),
     dropzone: $("#dropzone"),
@@ -115,11 +123,28 @@
     Math.round((state.distanceKm / C.courierKmh) * 60) + C.prepMinutes;
   const inRadius = () => state.distanceKm <= C.radiusKm;
 
-  function priceOrder() {
-    const items = state.files.length
+  function orderItems() {
+    return state.files.length
       ? state.files.map((f) => ({ ...f.settings, pages: countOf(f) }))
       : [{ ...state.defaults, pages: 0 }];
-    return PR.calcOrder(items);
+  }
+
+  // Harga tanpa promo; dipakai untuk memeriksa apakah sebuah kode berlaku.
+  const baseCalc = () => PR.calcOrder(orderItems());
+
+  function priceOrder() {
+    const items = orderItems();
+    const base = PR.calcOrder(items);
+    if (!state.promoCode) return base;
+    // Periksa ulang setiap kali harga berubah (mis. minimal belanja tidak lagi terpenuhi).
+    const chk = PR.checkPromo(state.promoCode, base, { uses: state.promoUses });
+    if (!chk.ok) {
+      setPromoMsg(`Kode ${state.promoCode} dilepas. ${chk.error}`, "warn");
+      state.promoCode = null;
+      syncPromoUi();
+      return base;
+    }
+    return PR.calcOrder(items, chk.promo);
   }
 
   /* ---------- ringkasan ---------- */
@@ -155,9 +180,21 @@
       [`Ongkir radius ${C.radiusKm} km`, calc.delivery],
       ["Biaya platform", calc.platform],
     );
+    if (calc.promo && calc.discount > 0) {
+      rows.push([`Promo ${calc.promo.code}`, -calc.discount, "is-promo"]);
+    }
+    if (calc.promo) {
+      setPromoMsg(
+        `Kode ${calc.promo.code} dipakai: ${calc.promo.label} (hemat ${rp(calc.discount)}).`,
+        "ok",
+      );
+    }
 
     el.lines.innerHTML = rows
-      .map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${rp(v)}</dd></div>`)
+      .map(
+        ([k, v, cls]) =>
+          `<div${cls ? ` class="${cls}"` : ""}><dt>${esc(k)}</dt><dd>${v < 0 ? "−" + rp(-v) : rp(v)}</dd></div>`,
+      )
       .join("");
     el.total.textContent = rp(calc.total);
 
@@ -225,6 +262,65 @@
     state.address = el.address.value.trim();
     el.address.removeAttribute("aria-invalid");
     el.addressError.hidden = true;
+  });
+
+  /* ---------- nomor telepon ---------- */
+  el.phone.addEventListener("input", () => {
+    state.phone = el.phone.value;
+    el.phone.removeAttribute("aria-invalid");
+    el.phoneError.hidden = true;
+  });
+  // Rapikan tulisan saat kolom ditinggalkan: "+62 812 3456 7890" jadi "0812-3456-7890"
+  el.phone.addEventListener("blur", () => {
+    const r = V.parsePhone(el.phone.value);
+    if (r.ok) el.phone.value = V.phoneDisplay(r.value);
+  });
+
+  /* ---------- kode promo ---------- */
+  function setPromoMsg(text, kind) {
+    el.promoMsg.textContent = text || "";
+    el.promoMsg.dataset.kind = kind || "";
+  }
+
+  function syncPromoUi() {
+    const on = !!state.promoCode;
+    el.promoInput.disabled = on;
+    el.btnPromo.textContent = on ? "Lepas" : "Pakai";
+    if (on) el.promoInput.value = state.promoCode;
+  }
+
+  el.btnPromo.addEventListener("click", () => {
+    if (state.promoCode) {
+      state.promoCode = null;
+      el.promoInput.value = "";
+      setPromoMsg("");
+      syncPromoUi();
+      renderSummary();
+      el.promoInput.focus();
+      return;
+    }
+    const chk = PR.checkPromo(el.promoInput.value, baseCalc(), {
+      uses: state.promoUses,
+    });
+    if (!chk.ok) {
+      el.promoInput.setAttribute("aria-invalid", "true");
+      setPromoMsg(chk.error, "error");
+      return;
+    }
+    el.promoInput.removeAttribute("aria-invalid");
+    state.promoCode = chk.promo.code;
+    syncPromoUi();
+    renderSummary(); // renderSummary menampilkan pesan berhasil
+  });
+  el.promoInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      el.btnPromo.click();
+    }
+  });
+  el.promoInput.addEventListener("input", () => {
+    el.promoInput.removeAttribute("aria-invalid");
+    if (!state.promoCode) setPromoMsg("");
   });
 
   el.btnGeo.addEventListener("click", () => {
@@ -700,6 +796,13 @@
       el.addressError.hidden = false;
       problems.push({ node: el.address, msg: "alamat penerima" });
     }
+    const ph = V.parsePhone(state.phone);
+    if (!ph.ok) {
+      el.phone.setAttribute("aria-invalid", "true");
+      el.phoneError.textContent = ph.error;
+      el.phoneError.hidden = false;
+      problems.push({ node: el.phone, msg: "nomor telepon" });
+    }
     if (!state.files.length) {
       showFileError("Upload dokumen PDF atau DOCX dulu.");
       problems.push({ node: el.dropzone, msg: "file dokumen" });
@@ -769,6 +872,7 @@
     return {
       campus: { id: campus().id, name: campus().name },
       address: state.address,
+      phone: V.parsePhone(state.phone).value,
       distanceKm: Number(state.distanceKm.toFixed(2)),
       etaMin: etaMinutes(),
       files: state.files.map((f, i) => ({
@@ -785,12 +889,24 @@
         binding: calc.binding,
         delivery: calc.delivery,
         platform: calc.platform,
+        subtotal: calc.subtotal,
+        discount: calc.discount,
         total: calc.total,
       },
+      promo: calc.promo,
     };
   }
 
   async function openPay() {
+    // Periksa ulang kode promo (pemakaian bisa berubah dari tab lain) sebelum QRIS tampil.
+    state.promoUses = await window.KilatDB.usedPromos();
+    const before = state.promoCode;
+    renderSummary();
+    if (before && !state.promoCode) {
+      el.formError.textContent = `Kode promo ${before} tidak berlaku lagi, jadi total diperbarui. Periksa ringkasan lalu coba lagi.`;
+      el.formError.hidden = false;
+      return;
+    }
     // Simpan pesanan sebagai 'menunggu pembayaran'. Jika pelanggan batal, admin tetap bisa melihatnya.
     const data = buildOrder();
     const existing = pendingId
@@ -903,6 +1019,9 @@
   });
 
   /* ---------- mulai ---------- */
+  window.KilatDB.usedPromos().then((u) => {
+    state.promoUses = u;
+  });
   renderCampusHint();
   syncForm();
   renderTabs();

@@ -19,7 +19,7 @@ print-kilat/
 │   ├── style.css     Gaya umum (token warna di bagian atas)
 │   └── staff.css     Gaya login, admin, kurir
 ├── js/
-│   ├── config.js     Harga, kampus, radius, AKUN STAF  ← ubah di sini
+│   ├── config.js     Harga, kampus, radius, Akun staff  ← ubah di sini
 │   ├── db.js         Penyimpanan pesanan + alur status (localStorage)
 │   ├── auth.js       Login/logout/guard staf
 │   ├── pricing.js    Rumus harga per file + total pesanan
@@ -56,6 +56,20 @@ print-kilat/
   Jangan ubah label "Rencana" menjadi "Aktif" sebelum fiturnya benar-benar ada.
 - Isi `supportContact` di `config.js` agar kontak untuk pertanyaan keamanan/hapus data tampil di halaman keamanan.
 - Data pesanan versi sebelumnya (kunci `printkilat.orders.v2`) tidak ikut terbawa karena struktur pesanan berubah. Percobaan lama di browser akan tampak kosong.
+
+## Nomor telepon dan kode promo
+
+- **Nomor telepon**: wajib diisi di langkah 01 (nomor HP Indonesia, boleh ditulis `0812-3456-7890`, `+62 812 3456 7890`, atau `6281234567890`;
+  disimpan dalam format `081234567890`). Admin melihat nomor lengkap dengan tautan WhatsApp. Kurir hanya melihat nomor yang disamarkan
+  sampai ia mengambil pesanan, setelah itu muncul tombol Telepon dan WhatsApp. Halaman pelacakan pelanggan menampilkan nomor yang disamarkan.
+- **Kode promo**: kolom "Kode promo" di Ringkasan. Daftar kode ada di `promos` pada `js/config.js`. Satu kode bisa memotong:
+  `platform` (biaya platform/admin), `delivery` (ongkir), `print` (biaya cetak + jilid), atau `total` (seluruh tagihan),
+  baik `percent` maupun `fixed`. Opsi tambahan: `maxDiscount`, `minSubtotal`, `expires` (`"YYYY-MM-DD"`), dan `once` (sekali per perangkat).
+  Tagihan tidak pernah negatif. Jika harga berubah sehingga syarat tidak terpenuhi (mis. minimal biaya cetak), kode dilepas otomatis dengan pesan.
+  Kode diperiksa ulang tepat sebelum QRIS tampil, dan pemakaiannya dicatat saat pembayaran berhasil.
+- **Batasan promo**: daftar kode terlihat oleh siapa pun yang membuka situsmu dan batas pemakaian hanya tercatat di browser
+  (bisa dihapus lewat pengaturan browser). Cukup untuk demo; promo sungguhan harus divalidasi dan dihitung di server.
+- Pesanan lama (tanpa telepon/promo) tetap bisa dibuka; kolomnya ditampilkan kosong.
 
 ## Footer
 

@@ -11,6 +11,15 @@
 window.KilatDB = (() => {
   const KEY = "printkilat.orders.v3"; // v3: satu pesanan bisa berisi beberapa file + kode serah terima
   const FLOW = ["paid", "printing", "picked_up", "on_the_way", "delivered"];
+  const PROMO_KEY = "printkilat.promos.v1"; // jumlah pemakaian kode promo di perangkat ini
+
+  const readUses = () => {
+    try {
+      return JSON.parse(localStorage.getItem(PROMO_KEY)) || {};
+    } catch {
+      return {};
+    }
+  };
 
   const read = () => {
     try {
@@ -78,11 +87,22 @@ window.KilatDB = (() => {
       const o = list.find((x) => x.id === id);
       if (!o) return null;
       const now = Date.now();
+      const firstPayment = o.status === "pending";
       o.status = "paid";
       o.paidAt = now;
       o.handoverCode = o.handoverCode || newCode();
       o.history = { ...(o.history || {}), paid: now };
       write(list);
+      // Catat pemakaian kode promo (hanya saat pembayaran pertama berhasil).
+      if (firstPayment && o.promo && o.promo.code) {
+        const uses = readUses();
+        uses[o.promo.code] = (uses[o.promo.code] || 0) + 1;
+        try {
+          localStorage.setItem(PROMO_KEY, JSON.stringify(uses));
+        } catch {
+          /* abaikan */
+        }
+      }
       return o;
     },
 
@@ -128,6 +148,9 @@ window.KilatDB = (() => {
     },
     async latestPaidOrder() {
       return read().find((o) => o.status !== "pending") || read()[0] || null;
+    },
+    async usedPromos() {
+      return readUses();
     },
     async listOrders() {
       return read();

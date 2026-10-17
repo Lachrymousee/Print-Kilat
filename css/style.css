@@ -1980,3 +1980,17 @@ h3 {
     width: 100%;
   }
 }
+
+/* ---------- 10. NOMOR TELEPON & KODE PROMO ---------- */
+.promo { margin: 0 0 16px; }
+.promo-label { display: block; font-size: 13px; font-weight: 700; margin-bottom: 8px; }
+.promo-ctl { display: flex; gap: 8px; }
+.promo-ctl .input { height: 46px; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+.promo-ctl .input::placeholder { text-transform: none; letter-spacing: 0; font-weight: 400; }
+.promo-ctl .input:disabled { background: var(--mint-50); color: var(--green-800); }
+.promo-ctl .btn { flex: none; min-width: 76px; }
+.promo-msg { margin-top: 8px; font-size: 13px; font-weight: 600; min-height: 1.2em; }
+.promo-msg[data-kind="ok"] { color: var(--green-700); }
+.promo-msg[data-kind="error"] { color: var(--danger); }
+.promo-msg[data-kind="warn"] { color: #8a5a00; }
+.lines .is-promo dt, .lines .is-promo dd { color: var(--green-700); font-weight: 700; }

@@ -32,6 +32,26 @@ window.KilatOrderView = (() => {
     return `${f.printPages} hal × ${copies}${range}`;
   }
 
+  /* ---------- nomor telepon ---------- */
+  /** Terima 08…, 628…, atau +628… (boleh ada spasi/strip). Hasil: format lokal 08… */
+  function parsePhone(raw) {
+    const s = String(raw || "").replace(/[\s().-]/g, "");
+    if (!s) return { ok: false, error: "Isi nomor telepon yang bisa dihubungi kurir." };
+    if (!/^\+?\d+$/.test(s)) {
+      return { ok: false, error: "Nomor hanya boleh berisi angka (boleh diawali +62)." };
+    }
+    let d = s.replace(/^\+/, "");
+    if (d.startsWith("62")) d = "0" + d.slice(2);
+    if (!/^08[1-9]\d{7,10}$/.test(d)) {
+      return { ok: false, error: "Gunakan nomor HP Indonesia, contoh 081234567890." };
+    }
+    return { ok: true, value: d };
+  }
+  const phoneDisplay = (n) => String(n || "").replace(/^(\d{4})(\d{4})(\d+)$/, "$1-$2-$3");
+  const phoneMasked = (n) => (n ? `${String(n).slice(0, 4)}-••••-${String(n).slice(-4)}` : "-");
+  const telLink = (n) => "tel:+62" + String(n).slice(1);
+  const waLink = (n) => "https://wa.me/62" + String(n).slice(1);
+
   const files = (o) => (o && Array.isArray(o.files) ? o.files : []);
   const title = (o) => {
     const fs = files(o);
@@ -55,5 +75,10 @@ window.KilatOrderView = (() => {
     files,
     title,
     totalSheets,
+    parsePhone,
+    phoneDisplay,
+    phoneMasked,
+    telLink,
+    waLink,
   };
 })();

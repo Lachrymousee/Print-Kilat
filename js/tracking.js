@@ -94,10 +94,15 @@
       `<b>${esc(f.name)}</b><br>${esc(V.pagesLabel(f))} · ${esc(V.specParts(f).join(" · "))}`,
     ]);
   });
-  rows.push(
-    ["Tujuan", esc(`${order.address}, ${order.campus.name}`)],
-    ["Total", esc(rp(order.price.total))],
-  );
+  rows.push(["Tujuan", esc(`${order.address}, ${order.campus.name}`)]);
+  if (order.phone) rows.push(["Kontak", esc(V.phoneMasked(order.phone))]);
+  if (order.promo) {
+    rows.push([
+      "Promo",
+      esc(`${order.promo.code} (hemat ${rp(order.promo.discount || 0)})`),
+    ]);
+  }
+  rows.push(["Total", esc(rp(order.price.total))]);
   $("#orderLines").innerHTML = rows
     .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
     .join("");

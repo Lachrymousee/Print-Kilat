@@ -49,6 +49,22 @@
   $("#hello").textContent = `Halo, ${me.name}.`;
   $("#btnLogout").addEventListener("click", () => window.KilatAuth.logout());
 
+  // Nomor lengkap hanya untuk kurir yang sudah mengambil pesanan ini.
+  function contactHtml(o) {
+    if (!o.phone) return "";
+    const mine = o.courier && o.courier.username === me.username;
+    if (!mine) {
+      return `<div class="task-contact is-masked">
+          <div><strong>Kontak penerima</strong><span>${esc(V.phoneMasked(o.phone))} · nomor lengkap tampil setelah kamu mengambil pesanan</span></div>
+        </div>`;
+    }
+    return `<div class="task-contact">
+          <div><strong>Kontak penerima</strong><span>${esc(V.phoneDisplay(o.phone))}</span></div>
+          <a class="chip-btn" href="${esc(V.telLink(o.phone))}">Telepon</a>
+          <a class="chip-btn" href="${esc(V.waLink(o.phone))}" target="_blank" rel="noopener">WhatsApp</a>
+        </div>`;
+  }
+
   function taskHtml(o) {
     const done = DONE_COUNT[o.status];
     const files = V.files(o);
@@ -78,6 +94,7 @@
           <span class="icon-badge"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg></span>
           <div><strong>${esc(o.campus?.name)} · ${kmFmt(o.distanceKm ?? 0)}</strong><span>${esc(o.address)}</span></div>
         </div>
+        ${contactHtml(o)}
         <div class="task-steps" aria-label="Progres">
           ${STEPS.map((s, i) => `<div class="${i < done ? "is-done" : ""}">${s}</div>`).join("")}
         </div>

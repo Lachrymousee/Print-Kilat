@@ -663,3 +663,11 @@ body.staff {
   font-weight: 800;
   text-align: center;
 }
+
+/* ---------- kurir: kontak penerima ---------- */
+.task-contact { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; background: #fff; border-radius: 22px; padding: 12px 16px; font-size: 14px; }
+.task-contact > div { flex: 1 1 200px; min-width: 0; }
+.task-contact strong { display: block; }
+.task-contact span { color: var(--muted); overflow-wrap: anywhere; }
+.task-contact.is-masked span { font-size: 13px; }
+.task-contact .chip-btn { text-decoration: none; display: inline-flex; align-items: center; height: 38px; }

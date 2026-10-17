@@ -77,6 +77,49 @@ window.KILAT_CONFIG = {
     platformFee: 1000,
   },
 
+  // ---------- Kode promo ----------
+  // target : "platform" (biaya platform/admin) | "delivery" (ongkir)
+  //          | "print" (biaya cetak + jilid) | "total" (seluruh tagihan)
+  // type   : "percent" (value = persen) | "fixed" (value = rupiah)
+  // opsional: maxDiscount (batas potongan, rupiah), minSubtotal (minimal biaya cetak + jilid),
+  //           expires ("YYYY-MM-DD", berlaku sampai akhir hari itu),
+  //           once (true = hanya bisa dipakai sekali per perangkat)
+  // PENTING: daftar ini bisa dibaca siapa pun yang membuka situsmu dan batas pemakaian
+  // hanya tercatat di browser. Cukup untuk demo; promo sungguhan harus divalidasi di server.
+  promos: [
+    {
+      code: "HEMAT",
+      label: "Gratis biaya platform",
+      target: "platform",
+      type: "percent",
+      value: 100,
+    },
+    {
+      code: "ONGKIR3",
+      label: "Potongan ongkir Rp3.000",
+      target: "delivery",
+      type: "fixed",
+      value: 3000,
+    },
+    {
+      code: "KILAT10",
+      label: "Diskon 10% biaya cetak (maks. Rp10.000)",
+      target: "print",
+      type: "percent",
+      value: 10,
+      maxDiscount: 10000,
+      minSubtotal: 10000,
+    },
+    {
+      code: "PERTAMA",
+      label: "Potongan Rp5.000 untuk pesanan pertama",
+      target: "total",
+      type: "fixed",
+      value: 5000,
+      once: true,
+    },
+  ],
+
   maxFileMB: 10,
   maxFiles: 5, // jumlah file maksimal dalam satu pesanan
   maxCopies: 99,

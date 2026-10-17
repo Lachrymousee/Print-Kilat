@@ -55,6 +55,16 @@
   $("#btnLogout").addEventListener("click", () => window.KilatAuth.logout());
 
   /* ---------- render ---------- */
+  function contactHtml(o) {
+    if (!o.phone) return "-";
+    return `${esc(V.phoneDisplay(o.phone))} · <a href="${esc(V.waLink(o.phone))}" target="_blank" rel="noopener">WhatsApp</a>`;
+  }
+
+  function promoLine(o) {
+    if (!o.promo) return "";
+    return `<br>Promo ${esc(o.promo.code)} −${money(o.promo.discount || 0)}`;
+  }
+
   function detailHtml(o) {
     const price = o.price || {};
     const hist = C.statusLabels;
@@ -73,9 +83,10 @@
         <dl class="o-grid">
           ${fileRows}
           <div><dt>Tujuan</dt><dd>${esc(o.address)}<br>${esc(o.campus?.name)}</dd></div>
+          <div><dt>Kontak penerima</dt><dd>${contactHtml(o)}</dd></div>
           <div><dt>Jarak &amp; estimasi</dt><dd>${kmFmt(o.distanceKm ?? 0)} · ${esc(o.etaMin)} menit</dd></div>
           <div><dt>Kurir</dt><dd>${o.courier ? esc(o.courier.name) : "Belum ada"}</dd></div>
-          <div><dt>Rincian harga</dt><dd>Cetak ${money(price.print || 0)} · Jilid ${money(price.binding || 0)}<br>Ongkir ${money(price.delivery || 0)} · Platform ${money(price.platform || 0)}</dd></div>
+          <div><dt>Rincian harga</dt><dd>Cetak ${money(price.print || 0)} · Jilid ${money(price.binding || 0)}<br>Ongkir ${money(price.delivery || 0)} · Platform ${money(price.platform || 0)}${promoLine(o)}<br><b>Total ${money(price.total || 0)}</b></dd></div>
           <div><dt>Dibuat</dt><dd>${dt(o.createdAt)}</dd></div>
         </dl>
         <ul class="o-hist" aria-label="Riwayat status">${histItems}</ul>
@@ -141,7 +152,7 @@
 
   /* ---------- alat demo ---------- */
   // defs: [[nama, halamanTotal, halamanDicetak, rentang, salinan, warna, jilid, ukuran, jenisKertas], ...]
-  function sample(defs, status, minsAgo, courier) {
+  function sample(defs, status, minsAgo, courier, promoCode) {
     const created = Date.now() - minsAgo * 60000;
     const campus = C.campuses[0];
     const km = campus.defaultDistanceKm;
@@ -175,6 +186,7 @@
     );
     const calc = window.KilatPricing.calcOrder(
       items.map((f) => ({ ...f.options, pages: f.printPages })),
+      promoCode ? window.KilatPricing.findPromo(promoCode) : null,
     );
     items.forEach((f, i) => {
       f.price = { print: calc.items[i].print, binding: calc.items[i].binding };
@@ -182,6 +194,7 @@
     const order = {
       campus: { id: campus.id, name: campus.name },
       address: "Kost Green Park, lantai 2, kamar 203",
+      phone: "081234567890",
       distanceKm: km,
       etaMin: Math.round((km / C.courierKmh) * 60) + C.prepMinutes,
       files: items,
@@ -190,8 +203,11 @@
         binding: calc.binding,
         delivery: calc.delivery,
         platform: calc.platform,
+        subtotal: calc.subtotal,
+        discount: calc.discount,
         total: calc.total,
       },
+      promo: calc.promo,
       createdAt: created,
       status,
       history,
@@ -269,6 +285,7 @@
         "delivered",
         180,
         raka,
+        "HEMAT",
       ),
       sample(
         [

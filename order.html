@@ -89,6 +89,25 @@
               <p class="field-error" id="addressError" hidden></p>
             </div>
 
+            <div class="field">
+              <label for="phone">Nomor telepon / WhatsApp</label>
+              <input
+                class="input"
+                id="phone"
+                type="tel"
+                inputmode="tel"
+                autocomplete="tel"
+                maxlength="20"
+                placeholder="Contoh: 0812-3456-7890"
+                aria-describedby="phoneHelp phoneError"
+              />
+              <p class="hint" id="phoneHelp">
+                Dipakai kurir untuk menghubungimu saat mengantar. Hanya terlihat
+                oleh admin dan kurir yang mengantar pesananmu.
+              </p>
+              <p class="field-error" id="phoneError" hidden></p>
+            </div>
+
             <div class="loc-row">
               <button type="button" class="btn btn-ghost btn-sm" id="btnGeo">
                 Gunakan lokasiku untuk hitung jarak
@@ -312,6 +331,31 @@
 
             <dl class="lines" id="lines"></dl>
 
+            <div class="promo" id="promoBox">
+              <label class="promo-label" for="promoInput">Kode promo</label>
+              <div class="promo-ctl">
+                <input
+                  class="input"
+                  id="promoInput"
+                  type="text"
+                  autocomplete="off"
+                  autocapitalize="characters"
+                  spellcheck="false"
+                  maxlength="24"
+                  placeholder="Masukkan kode"
+                  aria-describedby="promoMsg"
+                />
+                <button
+                  type="button"
+                  class="btn btn-ghost btn-sm"
+                  id="btnPromo"
+                >
+                  Pakai
+                </button>
+              </div>
+              <p class="promo-msg" id="promoMsg" role="status"></p>
+            </div>
+
             <div class="total">
               <span>Total</span><strong id="total">Rp 0</strong>
             </div>
@@ -352,7 +396,9 @@
               </li>
               <li>
                 <strong>Data seminimal mungkin.</strong> Yang disimpan hanya
-                nama file, jumlah halaman, pengaturan cetak, dan alamat antar.
+                nama file, jumlah halaman, pengaturan cetak, alamat antar, dan
+                nomor teleponmu. Nomor telepon hanya terlihat oleh admin dan
+                kurir yang mengantar pesananmu.
               </li>
             </ul>
             <a href="keamanan.html">Baca jaminan keamanan lengkap ›</a>
